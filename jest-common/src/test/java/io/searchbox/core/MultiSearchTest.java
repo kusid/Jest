@@ -2,6 +2,9 @@ package io.searchbox.core;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonParser;
+import io.searchbox.client.config.ElasticsearchVersion;
+import io.searchbox.params.Parameters;
+import io.searchbox.params.SearchType;
 import org.json.JSONException;
 import org.junit.Test;
 import org.skyscreamer.jsonassert.JSONAssert;
@@ -17,6 +20,16 @@ import static org.junit.Assert.*;
 public class MultiSearchTest {
 
     @Test
+    public void multiSearchHasCorrectContentType() throws JSONException {
+        Search search = new Search.Builder("").build();
+        MultiSearch multiSearch = new MultiSearch.Builder(search).build();
+
+        assertEquals("POST", multiSearch.getRestMethodName());
+        assertEquals("/_msearch", multiSearch.getURI(ElasticsearchVersion.UNKNOWN));
+        assertEquals("application/x-ndjson", multiSearch.getHeader("Content-Type"));
+    }
+
+    @Test
     public void singleMultiSearchWithoutIndex() throws JSONException {
         String expectedData = " {\"index\" : \"_all\"}\n" +
                 "{\"query\" : {\"match_all\" : {}}}\n";
@@ -25,12 +38,12 @@ public class MultiSearchTest {
         MultiSearch multiSearch = new MultiSearch.Builder(search).build();
 
         assertEquals("POST", multiSearch.getRestMethodName());
-        assertEquals("/_msearch", multiSearch.getURI());
+        assertEquals("/_msearch", multiSearch.getURI(ElasticsearchVersion.UNKNOWN));
         JSONAssert.assertEquals(expectedData, multiSearch.getData(null).toString(), false);
     }
 
     @Test
-    public void singleMultiSearchWitIndex() throws JSONException {
+    public void singleMultiSearchWithIndex() throws JSONException {
         String expectedData = " {\"index\" : \"twitter\"}\n" +
                 "{\"query\" : {\"match_all\" : {}}}\n";
         Search search = new Search.Builder("{\"query\" : {\"match_all\" : {}}}")
@@ -40,12 +53,12 @@ public class MultiSearchTest {
         MultiSearch multiSearch = new MultiSearch.Builder(search).build();
 
         assertEquals("POST", multiSearch.getRestMethodName());
-        assertEquals("/_msearch", multiSearch.getURI());
+        assertEquals("/_msearch", multiSearch.getURI(ElasticsearchVersion.UNKNOWN));
         JSONAssert.assertEquals(expectedData, multiSearch.getData(null).toString(), false);
     }
 
     @Test
-    public void multiSearchWitIndex() throws JSONException {
+    public void multiSearchWithIndex() throws JSONException {
         String expectedData = " {\"index\" : \"twitter\"}\n" +
                 "{\"query\" : {\"match_all\" : {}}}\n" +
                 "{\"index\" : \"_all\"}\n" +
@@ -58,8 +71,35 @@ public class MultiSearchTest {
         MultiSearch multiSearch = new MultiSearch.Builder(search).addSearch(search2).build();
 
         assertEquals("POST", multiSearch.getRestMethodName());
-        assertEquals("/_msearch", multiSearch.getURI());
+        assertEquals("/_msearch", multiSearch.getURI(ElasticsearchVersion.UNKNOWN));
         JSONAssert.assertEquals(expectedData, multiSearch.getData(null).toString(), false);
+    }
+
+    @Test
+    public void multiSearchWithExtraParameters() throws JSONException {
+        String expectedData = " {\"index\" : \"twitter\", " +
+                "\"search_type\" : \"query_then_fetch\"," +
+                " \"routing\" : \"testRoute\"," +
+                " \"ignore_unavailable\" : \"true\"," +
+                " \"allow_no_indices\" : \"true\", " +
+                "\"expand_wildcards\" : \"true\"}\n" +
+                "{\"query\" : {\"match_all\" : {}}}\n";
+
+        Search search = new Search.Builder("{\"query\" : {\"match_all\" : {}}}")
+                .addIndex("twitter")
+                .setParameter(Parameters.ROUTING, "testRoute")
+                .setSearchType(SearchType.QUERY_THEN_FETCH)
+                .setParameter(Parameters.IGNORE_UNAVAILABLE, true)
+                .setParameter(Parameters.ALLOW_NO_INDICES, true)
+                .setParameter(Parameters.EXPAND_WILDCARDS, true)
+                .build();
+        Search search2 = new Search.Builder("{\"query\" : {\"match_all\" : {}}}").build();
+
+        MultiSearch multiSearch = new MultiSearch.Builder(search).addSearch(search2).build();
+
+        assertEquals("POST", multiSearch.getRestMethodName());
+        assertEquals("/_msearch", multiSearch.getURI(ElasticsearchVersion.UNKNOWN));
+        JSONAssert.assertEquals(expectedData, multiSearch.getData(null), false);
     }
 
     @Test
@@ -129,9 +169,12 @@ public class MultiSearchTest {
                 "          }\n" +
                 "      },\n" +
                 "      {\n" +
-                "         \"error\": \"There was a \\\"test\\\" error\"\n" +
+                "        \"error\" : {\n" +
+                "          \"type\" : \"search_phase_execution_exception\",\n" +
+                "          \"reason\" : \"There was a \\\"test\\\" error\"\n" +
+                "        }\n" +
                 "      }\n" +
-                "   ]\n" +
+                "  ]\n" +
                 "}";
 
         MultiSearchResult multiSearchResult = new MultiSearchResult(new Gson());

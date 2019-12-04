@@ -2,32 +2,38 @@ package io.searchbox.indices.type;
 
 import io.searchbox.action.AbstractMultiTypeActionBuilder;
 import io.searchbox.action.GenericResultAbstractAction;
+import io.searchbox.client.config.ElasticsearchVersion;
 
 /**
- * @author happyprg(hongsgo@gmail.com)
+ * @author happyprg(hongsgo @ gmail.com)
  */
 public class TypeExist extends GenericResultAbstractAction {
 
-	protected TypeExist(Builder builder) {
-		super(builder);
-		setURI(buildURI());
-	}
+    TypeExist(Builder builder) {
 
-	@Override
-	public String getRestMethodName() {
-		return "HEAD";
-	}
+        super(builder);
+    }
 
-	public static class Builder extends AbstractMultiTypeActionBuilder<TypeExist, Builder> {
+    @Override
+    protected String getURLCommandExtension(ElasticsearchVersion elasticsearchVersion) {
+        return "_mapping";
+    }
 
-		public Builder(String index) {
-			addIndex(index);
-		}
+    @Override
+    public String getRestMethodName() {
+        return "HEAD";
+    }
 
-		@Override
-		public TypeExist build() {
-			return new TypeExist(this);
-		}
-	}
+    public static class Builder extends AbstractMultiTypeActionBuilder<TypeExist, Builder> {
+
+        public Builder(String index) {
+            this.addIndex(index);
+        }
+
+        @Override
+        public TypeExist build() {
+            return new TypeExist(this);
+        }
+    }
 
 }

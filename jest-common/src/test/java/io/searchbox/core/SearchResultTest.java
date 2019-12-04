@@ -6,14 +6,11 @@ import io.searchbox.annotations.JestId;
 import io.searchbox.annotations.JestVersion;
 import org.junit.Test;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * @author cihat keser
@@ -52,6 +49,41 @@ public class SearchResultTest {
         searchResult.setSucceeded(true);
         searchResult.setJsonString(json);
         searchResult.setJsonObject(new JsonParser().parse(json).getAsJsonObject());
+        searchResult.setPathToResult("hits/hits/_source");
+
+        Float maxScore = searchResult.getMaxScore();
+        assertNull(maxScore);
+    }
+
+    @Test
+    public void testGetMaxScoreNullMaxScore() {
+        String jsonWithNullMaxScore = "{\n" +
+                "    \"_shards\":{\n" +
+                "        \"total\" : 5,\n" +
+                "        \"successful\" : 5,\n" +
+                "        \"failed\" : 0\n" +
+                "    },\n" +
+                "    \"hits\":{\n" +
+                "        \"max_score\" : null,\n" +
+                "        \"total\" : 1,\n" +
+                "        \"hits\" : [\n" +
+                "            {\n" +
+                "                \"_index\" : \"twitter\",\n" +
+                "                \"_type\" : \"tweet\",\n" +
+                "                \"_id\" : \"1\",\n" +
+                "                \"_source\" : {\n" +
+                "                    \"user\" : \"kimchy\",\n" +
+                "                    \"postDate\" : \"2009-11-15T14:12:12\",\n" +
+                "                    \"message\" : \"trying out Elasticsearch\"\n" +
+                "                }\n" +
+                "            }\n" +
+                "        ]\n" +
+                "    }\n" +
+                "}";
+        SearchResult searchResult = new SearchResult(new Gson());
+        searchResult.setSucceeded(true);
+        searchResult.setJsonString(jsonWithNullMaxScore);
+        searchResult.setJsonObject(new JsonParser().parse(jsonWithNullMaxScore).getAsJsonObject());
         searchResult.setPathToResult("hits/hits/_source");
 
         Float maxScore = searchResult.getMaxScore();
@@ -102,9 +134,9 @@ public class SearchResultTest {
         searchResult.setJsonObject(new JsonParser().parse(json).getAsJsonObject());
         searchResult.setPathToResult("hits/hits/_source");
 
-        Integer total = searchResult.getTotal();
+        Long total = searchResult.getTotal();
         assertNotNull(total);
-        assertEquals(new Integer(1), total);
+        assertEquals(new Long(1L), total);
     }
 
     @Test
@@ -136,7 +168,7 @@ public class SearchResultTest {
         searchResult.setJsonObject(new JsonParser().parse(jsonWithoutTotal).getAsJsonObject());
         searchResult.setPathToResult("hits/hits/_source");
 
-        Integer total = searchResult.getTotal();
+        Long total = searchResult.getTotal();
         assertNull(total);
     }
 
@@ -194,6 +226,7 @@ public class SearchResultTest {
         assertNotNull(hit.sort);
         assertNotNull(hit.id);
         assertNull(hit.score);
+        assertEquals(Collections.emptyList(), hit.matchedQueries);
 
         hit = searchResult.getFirstHit(Object.class, Object.class);
         assertNotNull(hit);
@@ -202,6 +235,7 @@ public class SearchResultTest {
         assertNotNull(hit.sort);
         assertNotNull(hit.id);
         assertNull(hit.score);
+        assertEquals(Collections.emptyList(), hit.matchedQueries);
     }
 
     @Test
@@ -326,6 +360,151 @@ public class SearchResultTest {
         assertNotNull(hit.sort);
         assertNotNull(hit.score);
         assertEquals("Incorrect version", someVersion, hit.source.getVersion());
+    }
+    
+    
+    /*
+     * This result is an "not real" example of a inner hit parent/child
+     */
+    @Test
+    public void testParentChild() {
+        Long someVersion = Integer.MAX_VALUE + 10L;
+
+        String jsonWithVersion = "{\n" +
+                "    \"_shards\":{\n" +
+                "        \"total\" : 5,\n" +
+                "        \"successful\" : 5,\n" +
+                "        \"failed\" : 0\n" +
+                "    },\n" +
+                "    \"hits\":{\n" +
+                "        \"total\" : 1,\n" +
+                "        \"hits\" : [\n" +
+                "            {\n" +
+                "                \"_index\" : \"twitter\",\n" +
+                "                \"_type\" : \"tweet\",\n" +
+                "                \"_score\" : \"1.02332\",\n" +
+                "				 \"_routing\": \"1\", \n" +
+                "				 \"_parent\": \"1\", \n" +                
+                "                \"_id\" : \"1\",\n" +
+                "                \"_version\" : \"" + someVersion + "\",\n" +
+                "                \"_source\" : {\n" +
+                "                    \"user\" : \"kimchy\",\n" +
+                "                    \"postDate\" : \"2009-11-15T14:12:12\",\n" +
+                "                    \"message\" : \"trying out Elasticsearch\"\n" +
+                "                },\n" +
+                "                \"sort\" : [\n" +
+                "                     1234.5678\n" +
+                "                ]\n" +
+                "            }\n" +
+                "        ]\n" +
+                "    }\n" +
+                "}";
+
+        SearchResult searchResult = new SearchResult(new Gson());
+        searchResult.setSucceeded(true);
+        searchResult.setJsonString(jsonWithVersion);
+        searchResult.setJsonObject(new JsonParser().parse(jsonWithVersion).getAsJsonObject());
+        searchResult.setPathToResult("hits/hits/_source");
+
+        SearchResult.Hit<TestObject, Void> hit = searchResult.getFirstHit(TestObject.class);
+        assertNotNull(hit.source);
+        assertNull(hit.explanation);
+        assertNotNull(hit.sort);
+        assertNotNull(hit.score);
+        assertNotNull(hit.parent);
+        assertNotNull(hit.routing);
+        assertEquals("Incorrect version", someVersion, hit.source.getVersion());
+    }  
+
+    @Test
+    public void testGetMatchedQueries() {
+        String jsonWithScore = "{\n" +
+                "    \"_shards\":{\n" +
+                "        \"total\" : 5,\n" +
+                "        \"successful\" : 5,\n" +
+                "        \"failed\" : 0\n" +
+                "    },\n" +
+                "    \"hits\":{\n" +
+                "        \"total\" : 1,\n" +
+                "        \"hits\" : [\n" +
+                "            {\n" +
+                "                \"_index\" : \"twitter\",\n" +
+                "                \"_type\" : \"tweet\",\n" +
+                "                \"_score\" : \"1.02332\",\n" +
+                "                \"_id\" : \"1\",\n" +
+                "                \"_source\" : {\n" +
+                "                    \"user\" : \"kimchy\",\n" +
+                "                    \"postDate\" : \"2009-11-15T14:12:12\",\n" +
+                "                    \"message\" : \"trying out Elasticsearch\"\n" +
+                "                },\n" +
+                "                \"sort\" : [\n" +
+                "                     1234.5678\n" +
+                "                ], \n" +
+                "                \"matched_queries\" : [\"some-query\"] \n" +
+                "            }\n" +
+                "        ]\n" +
+                "    }\n" +
+                "}";
+
+        SearchResult searchResult = new SearchResult(new Gson());
+        searchResult.setSucceeded(true);
+        searchResult.setJsonString(jsonWithScore);
+        searchResult.setJsonObject(new JsonParser().parse(jsonWithScore).getAsJsonObject());
+        searchResult.setPathToResult("hits/hits/_source");
+
+        SearchResult.Hit hit = searchResult.getFirstHit(Object.class);
+        assertNotNull(hit);
+        assertNotNull(hit.source);
+        assertNull(hit.explanation);
+        assertNotNull(hit.sort);
+        assertNotNull(hit.id);
+        assertNotNull(hit.score);
+        assertEquals("Incorrect Matched Query", Collections.singletonList("some-query"), hit.matchedQueries);
+
+        hit = searchResult.getFirstHit(Object.class, Object.class);
+        assertNotNull(hit);
+        assertNotNull(hit.source);
+        assertNull(hit.explanation);
+        assertNotNull(hit.sort);
+        assertNotNull(hit.id);
+        assertNotNull(hit.score);
+        assertEquals("Incorrect Matched Query", Collections.singletonList("some-query"), hit.matchedQueries);
+    }
+
+    @Test
+    public void testGetHitsWithoutSource() {
+        Long version = 2L;
+        String jsonWithoutSource = "{\n" +
+                "    \"_shards\":{\n" +
+                "        \"total\" : 5,\n" +
+                "        \"successful\" : 5,\n" +
+                "        \"failed\" : 0\n" +
+                "    },\n" +
+                "    \"hits\":{\n" +
+                "        \"total\" : 1,\n" +
+                "        \"hits\" : [\n" +
+                "            {\n" +
+                "                \"_index\" : \"twitter\",\n" +
+                "                \"_type\" : \"tweet\",\n" +
+                "                \"_score\" : \"1.02332\",\n" +
+                "                \"_id\" : \"1\",\n" +
+                "                \"_version\" : \"" + version + "\"\n" +
+                "            }\n" +
+                "        ]\n" +
+                "    }\n" +
+                "}";
+        SearchResult searchResult = new SearchResult(new Gson());
+        searchResult.setSucceeded(true);
+        searchResult.setJsonString(jsonWithoutSource);
+        searchResult.setJsonObject(new JsonParser().parse(jsonWithoutSource).getAsJsonObject());
+        searchResult.setPathToResult("hits/hits/_source");
+        SearchResult.Hit<TestObject, Void> hit = searchResult.getFirstHit(TestObject.class);
+        assertNotNull(hit.source);
+        assertNull(hit.explanation);
+        assertNull(hit.sort);
+        assertNotNull(hit.score);
+        assertEquals("1", hit.source.getId());
+        assertEquals(version, hit.source.getVersion());
     }
 
     class TestObject {

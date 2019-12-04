@@ -1,4 +1,4 @@
-#Jest
+# Jest
 
 Jest is a Java HTTP Rest client for [ElasticSearch](http://www.elasticsearch.org).
 
@@ -39,7 +39,7 @@ Add Jest as a dependency to your project.
 <dependency>
   <groupId>io.searchbox</groupId>
   <artifactId>jest</artifactId>
-  <version>2.0.0</version>
+  <version>5.3.3</version>
 </dependency>
 ```
 

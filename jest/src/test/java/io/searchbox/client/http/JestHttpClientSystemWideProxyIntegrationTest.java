@@ -12,11 +12,7 @@ import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.test.ESIntegTestCase;
 import org.elasticsearch.transport.Netty4Plugin;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.*;
 import org.littleshoot.proxy.HttpFilters;
 import org.littleshoot.proxy.HttpFiltersAdapter;
 import org.littleshoot.proxy.HttpFiltersSourceAdapter;
@@ -37,6 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 @ESIntegTestCase.ClusterScope(scope = ESIntegTestCase.Scope.TEST, numDataNodes = 0)
 public class JestHttpClientSystemWideProxyIntegrationTest extends ESIntegTestCase {
+
 
     private static final int PROXY_PORT = 8790;
 
@@ -110,42 +107,42 @@ public class JestHttpClientSystemWideProxyIntegrationTest extends ESIntegTestCas
         factory.setHttpClientConfig(new HttpClientConfig
                 .Builder("http://localhost:" + cluster().httpAddresses()[0].getPort())
                 .build());
-        JestHttpClient jestClient = (JestHttpClient) factory.getObject();
-        assertNotNull(jestClient);
+        try (JestHttpClient jestClient = (JestHttpClient) factory.getObject()) {
+            assertNotNull(jestClient);
 
-        JestResult result = jestClient.execute(new Stats.Builder().build());
-        assertTrue(result.getErrorMessage(), result.isSucceeded());
-        assertEquals(1, numProxyRequests.intValue());
-        jestClient.shutdownClient();
+            JestResult result = jestClient.execute(new Stats.Builder().build());
+            assertTrue(result.getErrorMessage(), result.isSucceeded());
+            assertEquals(1, numProxyRequests.intValue());
+        }
 
         // test async execution
         factory.setHttpClientConfig(new HttpClientConfig
                 .Builder("http://localhost:" + cluster().httpAddresses()[0].getPort())
                 .multiThreaded(true)
                 .build());
-        jestClient = (JestHttpClient) factory.getObject();
-        assertNotNull(jestClient);
+        try (JestHttpClient jestClient = (JestHttpClient) factory.getObject()) {
+            assertNotNull(jestClient);
 
-        final CountDownLatch actionExecuted = new CountDownLatch(1);
-        jestClient.executeAsync(new Stats.Builder().build(), new JestResultHandler<JestResult>() {
-            @Override
-            public void completed(JestResult result) {
-                actionExecuted.countDown();
+            final CountDownLatch actionExecuted = new CountDownLatch(1);
+            jestClient.executeAsync(new Stats.Builder().build(), new JestResultHandler<JestResult>() {
+                @Override
+                public void completed(JestResult result) {
+                    actionExecuted.countDown();
+                }
+
+                @Override
+                public void failed(Exception ex) {
+                    throw new RuntimeException(ex);
+                }
+            });
+
+            boolean finishedAsync = actionExecuted.await(2, TimeUnit.SECONDS);
+            if (!finishedAsync) {
+                fail("Execution took too long to complete");
             }
 
-            @Override
-            public void failed(Exception ex) {
-                throw new RuntimeException(ex);
-            }
-        });
-
-        boolean finishedAsync = actionExecuted.await(2, TimeUnit.SECONDS);
-        if (!finishedAsync) {
-            fail("Execution took too long to complete");
+            assertEquals(2, numProxyRequests.intValue());
         }
-
-        assertEquals(2, numProxyRequests.intValue());
-        jestClient.shutdownClient();
     }
 
     @Override

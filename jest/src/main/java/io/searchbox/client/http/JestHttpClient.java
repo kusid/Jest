@@ -5,6 +5,7 @@ import io.searchbox.action.Action;
 import io.searchbox.client.AbstractJestClient;
 import io.searchbox.client.JestResult;
 import io.searchbox.client.JestResultHandler;
+import io.searchbox.client.config.ElasticsearchVersion;
 import io.searchbox.client.config.exception.CouldNotConnectException;
 import io.searchbox.client.http.apache.HttpDeleteWithEntity;
 import io.searchbox.client.http.apache.HttpGetWithEntity;
@@ -49,6 +50,8 @@ public class JestHttpClient extends AbstractJestClient {
     private CloseableHttpAsyncClient asyncClient;
 
     private HttpClientContext httpClientContextTemplate;
+
+    private ElasticsearchVersion elasticsearchVersion = ElasticsearchVersion.UNKNOWN;
 
     /**
      * @throws IOException in case of a problem or the connection was aborted during request,
@@ -97,21 +100,22 @@ public class JestHttpClient extends AbstractJestClient {
 
     @Override
     public void shutdownClient() {
-        super.shutdownClient();
         try {
-            asyncClient.close();
-        } catch (IOException ex) {
-            log.error("Exception occurred while shutting down the async client.", ex);
-        }
-        try {
-            httpClient.close();
-        } catch (IOException ex) {
-            log.error("Exception occurred while shutting down the sync client.", ex);
+            close();
+        } catch (IOException e) {
+            log.error("Exception occurred while shutting down the sync client.", e);
         }
     }
 
+    @Override
+    public void close() throws IOException {
+        super.close();
+        asyncClient.close();
+        httpClient.close();
+    }
+
     protected <T extends JestResult> HttpUriRequest prepareRequest(final Action<T> clientRequest, final RequestConfig requestConfig) {
-        String elasticSearchRestUrl = getRequestURL(getNextServer(), clientRequest.getURI());
+        String elasticSearchRestUrl = getRequestURL(getNextServer(), clientRequest.getURI(elasticsearchVersion));
         HttpUriRequest request = constructHttpMethod(clientRequest.getRestMethodName(), elasticSearchRestUrl, clientRequest.getData(gson), requestConfig);
 
         log.debug("Request method={} url={}", clientRequest.getRestMethodName(), elasticSearchRestUrl);
@@ -240,6 +244,10 @@ public class JestHttpClient extends AbstractJestClient {
 
     public void setHttpClientContextTemplate(HttpClientContext httpClientContext) {
         this.httpClientContextTemplate = httpClientContext;
+    }
+
+    public void setElasticsearchVersion(ElasticsearchVersion elasticsearchVersion) {
+        this.elasticsearchVersion = elasticsearchVersion;
     }
 
     protected class DefaultCallback<T extends JestResult> implements FutureCallback<HttpResponse> {

@@ -12,7 +12,6 @@ public class IndicesExists extends GenericResultAbstractAction {
 
     protected IndicesExists(Builder builder) {
         super(builder);
-        setURI(buildURI());
     }
 
     @Override
@@ -27,7 +26,7 @@ public class IndicesExists extends GenericResultAbstractAction {
         }
 
         public Builder(Collection<? extends String> indices){
-            addIndex(indices);
+            addIndices(indices);
         }
 
         @Override

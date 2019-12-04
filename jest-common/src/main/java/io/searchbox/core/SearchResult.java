@@ -106,50 +106,76 @@ public class SearchResult extends JestResult {
             JsonObject hitObject = hitElement.getAsJsonObject();
             JsonObject source = hitObject.getAsJsonObject(sourceKey);
 
-            if (source != null) {
-                String index = hitObject.get("_index").getAsString();
-                String type = hitObject.get("_type").getAsString();
 
-                String id = hitObject.get("_id").getAsString();
+            String index = hitObject.get("_index").getAsString();
+            String type = hitObject.get("_type").getAsString();
 
-                Double score = null;
-                if (hitObject.has("_score") && !hitObject.get("_score").isJsonNull()) {
-                    score = hitObject.get("_score").getAsDouble();
-                }
+            String id = hitObject.get("_id").getAsString();
 
-                JsonElement explanation = hitObject.get(EXPLANATION_KEY);
-                Map<String, List<String>> highlight = extractHighlight(hitObject.getAsJsonObject(HIGHLIGHT_KEY));
-                List<String> sort = extractSort(hitObject.getAsJsonArray(SORT_KEY));
+            Double score = null;
+            if (hitObject.has("_score") && !hitObject.get("_score").isJsonNull()) {
+                score = hitObject.get("_score").getAsDouble();
+            }
 
-                if (addEsMetadataFields) {
-                    JsonObject clonedSource = null;
-                    for (MetaField metaField : META_FIELDS) {
-                        JsonElement metaElement = hitObject.get(metaField.esFieldName);
-                        if (metaElement != null) {
-                            if (clonedSource == null) {
+            String parent = null;
+            String routing = null;
+
+            if (hitObject.has("_parent") && !hitObject.get("_parent").isJsonNull()) {
+                parent = hitObject.get("_parent").getAsString();
+            }
+
+            if (hitObject.has("_routing") && !hitObject.get("_routing").isJsonNull()) {
+                routing = hitObject.get("_routing").getAsString();
+            }
+
+            JsonElement explanation = hitObject.get(EXPLANATION_KEY);
+            Map<String, List<String>> highlight = extractHighlight(hitObject.getAsJsonObject(HIGHLIGHT_KEY));
+            List<String> sort = extractSort(hitObject.getAsJsonArray(SORT_KEY));
+
+            List<String> matchedQueries = new ArrayList<>();
+            if (hitObject.has("matched_queries") && !hitObject.get("matched_queries").isJsonNull()) {
+                JsonArray rawMatchedQueries = hitObject.get("matched_queries").getAsJsonArray();
+                rawMatchedQueries.forEach(matchedQuery -> {
+                    matchedQueries.add(matchedQuery.getAsString());
+                });
+            }
+
+            if (addEsMetadataFields) {
+                JsonObject clonedSource = null;
+                for (MetaField metaField : META_FIELDS) {
+                    JsonElement metaElement = hitObject.get(metaField.esFieldName);
+                    if (metaElement != null) {
+                        if (clonedSource == null) {
+                            if (source == null) {
+                                clonedSource = new JsonObject();
+                            } else {
                                 clonedSource = (JsonObject) CloneUtils.deepClone(source);
                             }
-                            clonedSource.add(metaField.internalFieldName, metaElement);
                         }
-                    }
-                    if (clonedSource != null) {
-                        source = clonedSource;
+                        clonedSource.add(metaField.internalFieldName, metaElement);
                     }
                 }
-
-                hit = new Hit<T, K>(
-                        sourceType,
-                        source,
-                        explanationType,
-                        explanation,
-                        highlight,
-                        sort,
-                        index,
-                        type,
-                        id,
-                        score
-                );
+                if (clonedSource != null) {
+                    source = clonedSource;
+                }
             }
+
+            hit = new Hit<T, K>(
+                    sourceType,
+                    source,
+                    explanationType,
+                    explanation,
+                    highlight,
+                    sort,
+                    index,
+                    type,
+                    id,
+                    score,
+                    parent,
+                    routing,
+                    matchedQueries
+            );
+
         }
 
         return hit;
@@ -186,17 +212,17 @@ public class SearchResult extends JestResult {
         return retval;
     }
 
-    public Integer getTotal() {
-        Integer total = null;
+    public Long getTotal() {
+        Long total = null;
         JsonElement obj = getPath(PATH_TO_TOTAL);
-        if (obj != null) total = obj.getAsInt();
+        if (obj != null) total = obj.getAsLong();
         return total;
     }
 
     public Float getMaxScore() {
         Float maxScore = null;
         JsonElement obj = getPath(PATH_TO_MAX_SCORE);
-        if (obj != null) maxScore = obj.getAsFloat();
+        if (obj != null && !obj.isJsonNull()) maxScore = obj.getAsFloat();
         return maxScore;
     }
 
@@ -240,10 +266,9 @@ public class SearchResult extends JestResult {
         public final String type;
         public final String id;
         public final Double score;
-
-        public Hit(Class<T> sourceType, JsonElement source) {
-            this(sourceType, source, null, null);
-        }
+        public final String parent;
+        public final String routing;
+        public final List<String> matchedQueries;
 
         public Hit(Class<T> sourceType, JsonElement source, Class<K> explanationType, JsonElement explanation) {
             this(sourceType, source, explanationType, explanation, null, null);
@@ -251,11 +276,12 @@ public class SearchResult extends JestResult {
 
         public Hit(Class<T> sourceType, JsonElement source, Class<K> explanationType, JsonElement explanation,
                    Map<String, List<String>> highlight, List<String> sort) {
-            this(sourceType, source, explanationType, explanation, highlight, sort, null, null, null, null);
+            this(sourceType, source, explanationType, explanation, highlight, sort, null, null, null, null, null, null, null);
         }
 
         public Hit(Class<T> sourceType, JsonElement source, Class<K> explanationType, JsonElement explanation,
-                   Map<String, List<String>> highlight, List<String> sort, String index, String type, String id, Double score) {
+                   Map<String, List<String>> highlight, List<String> sort, String index, String type, String id,
+                   Double score, String parent, String routing, List<String> matchedQueries) {
             if (source == null) {
                 this.source = null;
             } else {
@@ -273,6 +299,14 @@ public class SearchResult extends JestResult {
             this.type = type;
             this.id = id;
             this.score = score;
+            this.parent = parent;
+            this.routing = routing;
+            this.matchedQueries = matchedQueries;
+        }
+        
+        public Hit(Class<T> sourceType, JsonElement source, Class<K> explanationType, JsonElement explanation,
+                Map<String, List<String>> highlight, List<String> sort, String index, String type, String id, Double score) {
+            this(sourceType, source, explanationType, explanation, highlight, sort, index, type, id, score, null, null, null);
         }
 
         public Hit(T source) {
@@ -284,19 +318,21 @@ public class SearchResult extends JestResult {
         }
 
         public Hit(T source, K explanation, Map<String, List<String>> highlight, List<String> sort) {
-            this(source, explanation, highlight, sort, null, null, null, null);
+            this(source, explanation, highlight, sort, null, null, null, null, null);
         }
 
-        public Hit(T source, K explanation, Map<String, List<String>> highlight, List<String> sort, String index, String type, String id, Double score) {
+        public Hit(T source, K explanation, Map<String, List<String>> highlight, List<String> sort, String index, String type, String id, Double score, List<String> matchedQueries) {
             this.source = source;
             this.explanation = explanation;
             this.highlight = highlight;
             this.sort = sort;
-
             this.index = index;
             this.type = type;
             this.id = id;
             this.score = score;
+            this.parent = null;
+            this.routing = null;
+            this.matchedQueries = matchedQueries;
         }
 
         @Override

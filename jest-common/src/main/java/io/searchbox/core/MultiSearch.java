@@ -1,8 +1,11 @@
 package io.searchbox.core;
 
+import com.google.common.base.CharMatcher;
 import com.google.gson.Gson;
 import io.searchbox.action.AbstractAction;
 import io.searchbox.action.GenericResultAbstractAction;
+import io.searchbox.client.config.ElasticsearchVersion;
+import io.searchbox.params.Parameters;
 import io.searchbox.strings.StringUtils;
 
 import java.util.Collection;
@@ -15,14 +18,13 @@ import java.util.Objects;
  * @author cihat keser
  */
 public class MultiSearch extends AbstractAction<MultiSearchResult> {
+    private static final CharMatcher NEWLINE_MATCHER = CharMatcher.anyOf("\r\n").precomputed();
 
     private Collection<Search> searches;
 
     protected MultiSearch(Builder builder) {
         super(builder);
-
         this.searches = builder.searchList;
-        setURI(buildURI());
     }
 
     @Override
@@ -48,35 +50,40 @@ public class MultiSearch extends AbstractAction<MultiSearchResult> {
         StringBuilder sb = new StringBuilder();
         for (Search search : searches) {
             sb.append("{\"index\" : \"").append(search.getIndex());
-            if (!StringUtils.isBlank(search.getType())) {
+            if (StringUtils.isNotBlank(search.getType())) {
                 sb.append("\", \"type\" : \"").append(search.getType());
             }
-            sb.append(getParameter(search, "ignore_unavailable"));
-            sb.append(getParameter(search, "allow_no_indices"));
-            sb.append(getParameter(search, "expand_wildcards"));
+            sb.append(getParameter(search, Parameters.IGNORE_UNAVAILABLE));
+            sb.append(getParameter(search, Parameters.ALLOW_NO_INDICES));
+            sb.append(getParameter(search, Parameters.EXPAND_WILDCARDS));
+            sb.append(getParameter(search, Parameters.ROUTING));
+            sb.append(getParameter(search, Parameters.SEARCH_TYPE));
+
+            final String query = NEWLINE_MATCHER.removeFrom(search.getData(gson));
             sb.append("\"}\n")
-                    .append(search.getData(gson))
+                    .append(query)
                     .append("\n");
         }
         return sb.toString();
     }
 
     private String getParameter(Search search, String parameter) {
-        Collection<Object> searchParameter = search.getParameter(parameter);
-        if (searchParameter != null)
-            if (searchParameter != null) {
-                if (searchParameter.size() == 1) {
-                    return "\", \"" + parameter + "\" : \"" + searchParameter.iterator().next();
-                } else if (searchParameter.size() > 1) {
-                    throw new IllegalArgumentException("Expecting a single value for '" + parameter + "' parameter, you provided: " + searchParameter.size());
-                }
+        final Collection<Object> searchParameter = search.getParameter(parameter);
+        if (searchParameter != null) {
+            final int parameters = searchParameter.size();
+            if (parameters == 1) {
+                return "\", \"" + parameter + "\" : \"" + searchParameter.iterator().next();
+            } else if (parameters > 1) {
+                throw new IllegalArgumentException("Expecting a single value for '" + parameter + "' parameter, you provided: " + parameters);
             }
+        }
+
         return "";
     }
 
     @Override
-    protected String buildURI() {
-        return super.buildURI() + "/_msearch";
+    protected String buildURI(ElasticsearchVersion elasticsearchVersion) {
+        return super.buildURI(elasticsearchVersion) + "/_msearch";
     }
 
     @Override
@@ -101,13 +108,15 @@ public class MultiSearch extends AbstractAction<MultiSearchResult> {
     }
 
     public static class Builder extends GenericResultAbstractAction.Builder<MultiSearch, Builder> {
-        private List<Search> searchList = new LinkedList<Search>();
+        private List<Search> searchList = new LinkedList<>();
 
         public Builder(Search search) {
+            setHeader("Content-Type", "application/x-ndjson");
             searchList.add(search);
         }
 
         public Builder(Collection<? extends Search> searches) {
+            setHeader("Content-Type", "application/x-ndjson");
             searchList.addAll(searches);
         }
 

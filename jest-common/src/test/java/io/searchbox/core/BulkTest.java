@@ -1,10 +1,13 @@
 package io.searchbox.core;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import io.searchbox.client.config.ElasticsearchVersion;
 import org.json.JSONException;
 import org.junit.Test;
 import org.skyscreamer.jsonassert.JSONAssert;
@@ -102,14 +105,50 @@ public class BulkTest {
     @Test
     public void testUris() {
         Bulk bulkWitIndex = new Bulk.Builder().defaultIndex("twitter").build();
-        assertEquals("twitter/_bulk", bulkWitIndex.getURI());
+        assertEquals("twitter/_bulk", bulkWitIndex.getURI(ElasticsearchVersion.UNKNOWN));
 
         Bulk bulkWitIndexAndType = new Bulk.Builder().defaultIndex("twitter").defaultType("tweet").build();
-        assertEquals("twitter/tweet/_bulk", bulkWitIndexAndType.getURI());
+        assertEquals("twitter/tweet/_bulk", bulkWitIndexAndType.getURI(ElasticsearchVersion.UNKNOWN));
+    }
+
+    @Test
+    public void testEqualsWithUnequalActions() {
+        final String index = "twitter";
+        final String type = "tweet";
+
+        final Object leftPayload = Collections.singletonMap("field", "value");
+        final Update leftAction = new Update.Builder(leftPayload).build();
+        final Bulk left = new Bulk.Builder()
+                .addAction(leftAction).defaultIndex(index).defaultType(type)
+                .build();
+
+        final Bulk right = new Bulk.Builder()
+                .defaultIndex(index).defaultType(type)
+                .build();
+
+        assertNotEquals(left, right);
+    }
+
+    @Test
+    public void testHashCodeWithUnequalActions() {
+        final String index = "twitter";
+        final String type = "tweet";
+
+        final Object leftPayload = Collections.singletonMap("field", "value");
+        final Update leftAction = new Update.Builder(leftPayload).build();
+        final Bulk left = new Bulk.Builder()
+                .addAction(leftAction).defaultIndex(index).defaultType(type)
+                .build();
+
+        final Bulk right = new Bulk.Builder()
+                .defaultIndex(index).defaultType(type)
+                .build();
+
+        assertNotEquals(left.hashCode(), right.hashCode());
     }
 
     private void executeAsserts(Bulk bulk) {
         assertEquals("POST", bulk.getRestMethodName());
-        assertEquals("/_bulk", bulk.getURI());
+        assertEquals("/_bulk", bulk.getURI(ElasticsearchVersion.UNKNOWN));
     }
 }

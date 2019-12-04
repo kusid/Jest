@@ -3,6 +3,7 @@ package io.searchbox.indices.script;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import io.searchbox.client.config.ElasticsearchVersion;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -10,12 +11,12 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 
-import static io.searchbox.indices.script.ScriptLanguage.GROOVY;
 import static io.searchbox.indices.script.ScriptLanguage.JAVASCRIPT;
+import static io.searchbox.indices.script.ScriptLanguage.PAINLESS;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.junit.Assert.*;
 
-public class CreateIndexedScriptTest {
+public class CreateStoredScriptTest {
 
     private static final String A_NAME = "a_name";
     private CreateStoredScript script;
@@ -23,7 +24,7 @@ public class CreateIndexedScriptTest {
     private String groovysnippet;
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         builder = new CreateStoredScript.Builder(A_NAME).setLanguage(JAVASCRIPT);
         script = builder.build();
         groovysnippet = "def test_a=123\n" +
@@ -31,11 +32,15 @@ public class CreateIndexedScriptTest {
     }
 
     @Test
-    public void defaultScriptingLanguageIsGroovy() throws Exception {
+    public void defaultScriptingLanguageIsPainless() {
         CreateStoredScript script = new CreateStoredScript.Builder(A_NAME).build();
+        assertEquals(PAINLESS, script.getScriptLanguage());
+    }
 
-        assertEquals(GROOVY, script.getScriptLanguage());
-        assertThat(script.buildURI(), containsString(GROOVY.pathParameterName));
+    @Test
+    public void scriptingLanguageIsSetCorrectly() {
+        CreateStoredScript script = new CreateStoredScript.Builder(A_NAME).setLanguage(JAVASCRIPT).build();
+        assertEquals(JAVASCRIPT, script.getScriptLanguage());
     }
 
     @Test
@@ -44,24 +49,24 @@ public class CreateIndexedScriptTest {
     }
 
     @Test
-    public void scriptingLanguageIsSetIntoPath() throws Exception {
-        assertThat(script.buildURI(), containsString("/_scripts/" + JAVASCRIPT.pathParameterName + "/"));
+    public void scriptingLanguageIsSetIntoPath() {
+        assertThat(script.buildURI(ElasticsearchVersion.UNKNOWN), containsString("/_scripts/"));
     }
 
     @Test
-    public void nameOfTheScriptIsSetIntoPath() throws Exception {
-        assertThat(script.buildURI(), containsString("/_scripts/" + JAVASCRIPT.pathParameterName + "/" + A_NAME));
+    public void nameOfTheScriptIsSetIntoPath() {
+        assertThat(script.buildURI(ElasticsearchVersion.UNKNOWN), containsString("/_scripts/" + A_NAME));
     }
 
     @Test
-    public void scriptSourceIsValidJsonString() throws Exception {
+    public void scriptSourceIsValidJsonString() {
         builder.setSource(groovysnippet);
 
         script = builder.build();
 
         JsonObject jsonPayload = parseAsGson(script.getData(new Gson()));
         assertNotNull(jsonPayload.get("script"));
-        assertEquals(groovysnippet, jsonPayload.get("script").getAsString());
+        assertEquals(groovysnippet, jsonPayload.get("script").getAsJsonObject().get("source").getAsString());
     }
 
     @Test
@@ -72,16 +77,16 @@ public class CreateIndexedScriptTest {
 
         JsonObject jsonPayload = parseAsGson(script.getData(new Gson()));
         assertNotNull(jsonPayload.get("script"));
-        assertEquals(groovysnippet, jsonPayload.get("script").getAsString());
+        assertEquals(groovysnippet, jsonPayload.get("script").getAsJsonObject().get("source").getAsString());
     }
 
     private File createTempGroovySnippetFile() throws IOException {
         File file = File.createTempFile("test", ".groovy");
         file.deleteOnExit();
-        FileWriter writer = new FileWriter(file);
-        writer.write(groovysnippet);
-        writer.close();
-        return file;
+        try (FileWriter writer = new FileWriter(file)) {
+            writer.write(groovysnippet);
+            return file;
+        }
     }
 
     private JsonObject parseAsGson(String data) {

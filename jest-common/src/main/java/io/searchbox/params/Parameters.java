@@ -24,6 +24,9 @@ public class Parameters {
     // 'true' | 'false'
     public static final String ALLOW_NO_INDICES = "allow_no_indices";
 
+    // 'true' | 'false'
+    public static final String EXPAND_WILDCARDS = "expand_wildcards";
+
     //'quorum' | 'one' | 'all'
     public static final String CONSISTENCY = "consistency";
 
@@ -70,6 +73,9 @@ public class Parameters {
     public static final String FROM = "from";
 
     public static final String SCROLL = "scroll";
+
+    // indices, cluster (default)
+    public static final String LEVEL = "level";
 
     public static final String SCROLL_ID = "scroll_id";
 

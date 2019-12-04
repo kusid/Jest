@@ -8,6 +8,7 @@ import io.searchbox.client.AbstractJestClient;
 import io.searchbox.client.JestClient;
 import io.searchbox.client.JestResult;
 import io.searchbox.client.JestResultHandler;
+import io.searchbox.client.config.ElasticsearchVersion;
 import io.searchbox.client.config.exception.CouldNotConnectException;
 import org.apache.http.HttpEntityEnclosingRequest;
 import org.apache.http.HttpResponse;
@@ -46,7 +47,7 @@ public class JestDroidClient extends AbstractJestClient implements JestClient {
     }
 
     public <T extends JestResult> T execute(Action<T> clientRequest, RequestConfig requestConfig) throws IOException {
-        String elasticSearchRestUrl = getRequestURL(getNextServer(), clientRequest.getURI());
+        String elasticSearchRestUrl = getRequestURL(getNextServer(), clientRequest.getURI(ElasticsearchVersion.UNKNOWN));
         HttpUriRequest request = constructHttpMethod(clientRequest.getRestMethodName(), elasticSearchRestUrl, clientRequest.getData(gson), requestConfig);
 
         // add headers added to action
@@ -67,10 +68,6 @@ public class JestDroidClient extends AbstractJestClient implements JestClient {
     @Override
     public <T extends JestResult> void executeAsync(final Action<T> clientRequest, final JestResultHandler<? super T> resultHandler) {
         throw new UnsupportedOperationException("Jest-droid does not yet support async execution, sorry!");
-    }
-
-    public void shutdownClient() {
-        super.shutdownClient();
     }
 
     protected HttpUriRequest constructHttpMethod(String methodName, String url, String payload, RequestConfig requestConfig) {
